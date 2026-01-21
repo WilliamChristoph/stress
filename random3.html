@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>◎</title>
+<style>
+* { box-sizing: border-box; font-family: system-ui, monospace; }
+body {
+  margin: 0;
+  height: 100vh;
+  background: radial-gradient(circle, #0a0f1f, #05070f);
+  overflow: hidden;
+}
+.node {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+.node.blue {
+  background: radial-gradient(circle at top left, #fff, #00c8ff);
+  box-shadow: 0 0 18px #00c8ff88;
+}
+.node.gold {
+  background: radial-gradient(circle at top left, #fff7cc, #ffcc00);
+  box-shadow: 0 0 25px #ffcc00cc;
+}
+.node.purple {
+  background: radial-gradient(circle at top left, #f2d9ff, #9b4dff);
+  box-shadow: 0 0 22px #9b4dffaa;
+}
+.core {
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 45px;
+}
+.panel {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.35);
+  color: #7df9ff;
+  font-size: 14px;
+  backdrop-filter: blur(6px);
+  line-height: 1.4;
+}
+</style>
+</head>
+<body>
+
+<div id="panel" class="panel">
+Bola: 0<br>
+Sentuhan inti: 0<br>
+Emas: 0<br>
+Ungu: 0<br>
+Chance Emas: 1.00%<br>
+Chance Ungu: 5.00%
+</div>
+
+<div id="core" class="core"></div>
+
+<script>
+const nodes = [];
+const core = document.getElementById("core");
+const panel = document.getElementById("panel");
+
+const nodeR = 18;
+const coreR = 45;
+
+let chaos = false;
+let coreHue = 300;
+let coreHits = 0;
+let goldCount = 0;
+let purpleCount = 0;
+
+// dynamic chance
+const baseGoldChance = 0.01; // 1%
+let goldChance = baseGoldChance; 
+const maxGoldChance = 0.05;   // 5%
+const incrementGoldPer10Purple = 0.0025; // 0.25% per 10 purple
+
+let basePurpleChance = 0.05; // 5%
+let purpleChance = basePurpleChance;
+const maxPurpleChance = 0.15; // 15%
+const incrementPurplePerGold = 0.005; // 0.5% per emas
+
+function updatePanel() {
+  panel.innerHTML =
+    `Bola: ${nodes.length}<br>` +
+    `Sentuhan inti: ${coreHits}<br>` +
+    `Emas: ${goldCount}<br>` +
+    `Ungu: ${purpleCount}<br>` +
+    `Chance Emas: ${(goldChance*100).toFixed(2)}%<br>` +
+    `Chance Ungu: ${(purpleChance*100).toFixed(2)}%`;
+}
+
+function updateCoreColor() {
+  core.style.background =
+    `radial-gradient(circle at top left, #fff, hsl(${coreHue},100%,55%))`;
+  core.style.boxShadow =
+    `0 0 45px hsl(${coreHue},100%,55%)`;
+}
+
+function createNode(x, y) {
+  // hitung dynamic chance emas berdasarkan jumlah ungu
+  goldChance = Math.min(maxGoldChance, baseGoldChance + Math.floor(purpleCount / 10) * incrementGoldPer10Purple);
+
+  let type = "blue";
+  const r = Math.random();
+
+  if (r < goldChance) {
+    type = "gold";
+    goldCount++;
+    // naikkan chance ungu setiap muncul emas
+    purpleChance = Math.min(maxPurpleChance, purpleChance + incrementPurplePerGold);
+  } else if (r < goldChance + purpleChance) {
+    type = "purple";
+    purpleCount++;
+  }
+
+  const el = document.createElement("div");
+  el.className = "node " + type;
+  document.body.appendChild(el);
+
+  const n = {
+    el,
+    x,
+    y,
+    vx: (Math.random() - 0.5) * 4,
+    vy: (Math.random() - 0.5) * 4,
+    touched: false,
+    type
+  };
+
+  nodes.push(n);
+  drawNode(n);
+  updatePanel();
+}
+
+function drawNode(n) {
+  n.el.style.left = n.x - nodeR + "px";
+  n.el.style.top = n.y - nodeR + "px";
+}
+
+function collideCore(n) {
+  const cx = innerWidth / 2;
+  const cy = innerHeight / 2;
+  const dx = n.x - cx;
+  const dy = n.y - cy;
+  const dist = Math.hypot(dx, dy);
+  const minDist = coreR + nodeR;
+
+  if (dist < minDist) {
+    const nx = dx / dist;
+    const ny = dy / dist;
+
+    n.x = cx + nx * minDist;
+    n.y = cy + ny * minDist;
+
+    const dot = n.vx * nx + n.vy * ny;
+    n.vx -= 2 * dot * nx;
+    n.vy -= 2 * dot * ny;
+
+    if (!n.touched) {
+      if (n.type === "gold") coreHits += 5;
+      else if (n.type === "purple") coreHits += 2;
+      else coreHits += 1;
+
+      coreHue = (coreHue + (n.type === "gold" ? 60 : n.type === "purple" ? 40 : 25)) % 360;
+      updateCoreColor();
+      updatePanel();
+      n.touched = true;
+    }
+  } else {
+    n.touched = false;
+  }
+}
+
+function bounds(n) {
+  if (n.x < nodeR) { n.x = nodeR; n.vx *= -1; }
+  if (n.x > innerWidth - nodeR) { n.x = innerWidth - nodeR; n.vx *= -1; }
+  if (n.y < nodeR) { n.y = nodeR; n.vy *= -1; }
+  if (n.y > innerHeight - nodeR) { n.y = innerHeight - nodeR; n.vy *= -1; }
+}
+
+function tick() {
+  if (chaos) {
+    nodes.forEach(n => {
+      n.x += n.vx;
+      n.y += n.vy;
+      bounds(n);
+      collideCore(n);
+      drawNode(n);
+    });
+  }
+  requestAnimationFrame(tick);
+}
+
+window.addEventListener("click", e => createNode(e.clientX, e.clientY));
+window.addEventListener("keydown", e => {
+  if (e.code === "Space") chaos = !chaos;
+});
+
+updateCoreColor();
+updatePanel();
+tick();
+</script>
+
+</body>
+</html>
